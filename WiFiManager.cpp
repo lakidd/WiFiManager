@@ -139,7 +139,7 @@ boolean WiFiManager::autoConnect(char const *apName, char const *apPassword) {
   // attempt to connect; should it fail, fall back to AP
   WiFi.mode(WIFI_STA);
 
-  if (connectWifi("", "") == WL_CONNECTED)   {
+  if (connectWifi("", "",1,"") == WL_CONNECTED)   {
     DEBUG_WM(F("IP Address:"));
     DEBUG_WM(WiFi.localIP());
     //connected
@@ -183,7 +183,7 @@ boolean  WiFiManager::startConfigPortal(char const *apName, char const *apPasswo
       DEBUG_WM(F("Connecting to new AP"));
 
       // using user-provided  _ssid, _pass in place of system-stored ssid and pass
-      if (connectWifi(_ssid, _pass) != WL_CONNECTED) {
+      if (connectWifi(_ssid, _pass, _channel,_bssid) != WL_CONNECTED) {
         DEBUG_WM(F("Failed to connect."));
       } else {
         //connected
@@ -216,7 +216,7 @@ boolean  WiFiManager::startConfigPortal(char const *apName, char const *apPasswo
 }
 
 
-int WiFiManager::connectWifi(String ssid, String pass) {
+int WiFiManager::connectWifi(String ssid, String pass, int channel, String bssid) {
   DEBUG_WM(F("Connecting as wifi client..."));
 
   // check if we've got static_ip settings, if we do, use those.
@@ -231,9 +231,17 @@ int WiFiManager::connectWifi(String ssid, String pass) {
     return WL_CONNECTED;
   }
   //check if we have ssid and pass and force those, if not, try with last saved values
-  if (ssid != "") {
-    WiFi.begin(ssid.c_str(), pass.c_str());
-  } else {
+  if (ssid != "" && bssid != "") {
+
+	  uint8_t bssid_mac[6];
+	  parseBytes(bssid.c_str(), ':', bssid_mac, 6, 16);
+    WiFi.begin(ssid.c_str(), pass.c_str(), channel, bssid_mac);
+  } else if(ssid != ""){
+	WiFi.begin(ssid.c_str(), pass.c_str());
+
+  }
+
+  	  else {
     if (WiFi.SSID()) {
       DEBUG_WM("Using last saved values, should be faster");
       //trying to fix connection in progress hanging
@@ -540,6 +548,14 @@ void WiFiManager::handleWifiSave() {
   //SAVE/connect here
   _ssid = server->arg("s").c_str();
   _pass = server->arg("p").c_str();
+  _channel=server->arg("c").toInt();
+  _bssid=server->arg("b").c_str();
+  _bssid.replace("%3A",":");
+  DEBUG_WM(F("BSSID is"));
+  DEBUG_WM(_bssid);
+
+
+
 
   //parameters
   for (int i = 0; i < _paramsCount; i++) {
@@ -759,4 +775,15 @@ String WiFiManager::toStringIp(IPAddress ip) {
   }
   res += String(((ip >> 8 * 3)) & 0xFF);
   return res;
+}
+
+void WiFiManager::parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base) {
+    for (int i = 0; i < maxBytes; i++) {
+        bytes[i] = strtoul(str, NULL, base);  // Convert byte
+        str = strchr(str, sep);               // Find next separator
+        if (str == NULL || *str == '\0') {
+            break;                            // No more separators, exit
+        }
+        str++;                                // Point to next character after separator
+    }
 }
